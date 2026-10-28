@@ -1,0 +1,8 @@
+models/
+__pycache__/
+*.pyc
+test_wavs/
+*.wav
+*.log
+*.jsonl
+deploy/

@@ -1,0 +1,6 @@
+flask
+flask-sock
+paho-mqtt
+numpy
+soundfile
+sherpa-onnx

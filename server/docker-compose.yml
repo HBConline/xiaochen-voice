@@ -1,0 +1,55 @@
+# 小宸同学服务端容器化（部署目标：香橙派 4 Pro，linux/arm64）
+# 前提：./models/ 放好模型（见 README「模型文件说明」与 Release voice-models.zip）
+#   models/brain/Qwen3-0.6B-xiaochen-Q4_K_M.gguf
+#   models/asr/model.int8.onnx + tokens.txt        （Release 包里的 model_quant_fixed.onnx 改名 model.int8.onnx）
+#   models/tts/                                     （model-steps-3.onnx / hifigan_v2.onnx / lexicon.txt / tokens.txt）
+#   models/vad/silero_vad.onnx
+# 启动：docker compose up -d
+services:
+  brain:
+    # 官方 llama.cpp server 镜像（多架构，含 arm64）
+    image: ghcr.io/ggml-org/llama.cpp:server
+    network_mode: host          # 与 voice 同走 127.0.0.1，省一层 NAT
+    command:
+      - -m
+      - /models/Qwen3-0.6B-xiaochen-Q4_K_M.gguf
+      - --host
+      - 127.0.0.1
+      - --port
+      - "8080"
+      - -c
+      - "2048"
+      - --parallel
+      - "1"
+      - -fa
+      - on
+    volumes:
+      - ./models/brain:/models:ro
+    restart: unless-stopped
+
+  voice:
+    build: .
+    image: ghcr.io/hbconline/xiaochen-voice-server:v0.1
+    network_mode: host          # 要通宿主机 MQTT broker 与 8899 节点回连
+    depends_on:
+      - brain
+    environment:
+      BRAIN_URL: http://127.0.0.1:8080
+      DEVICE_BACKEND: mqtt
+      MQTT_HOST: 127.0.0.1
+      TTS_THREADS: "2"
+      # 设备绑定（按需改）
+      MQTT_RELAY_TOPICS: >-
+        living_room=cmnd/xiaochen-relay1/POWER,
+        bedroom=cmnd/xiaochen-relay2/POWER,
+        curtain=cmnd/xiaochen-curtain1/POWER,
+        curtain:living_room=cmnd/xiaochen-curtain1/POWER
+      # 板载麦采集环（容器里没硬件，默认关；真要用挂 /dev/snd 并设 MIC_DEVICE）
+      MIC_DEVICE: ""
+      PLAY_DEVICE: ""
+    volumes:
+      - ./models/asr/model.int8.onnx:/srv/app/model.int8.onnx:ro
+      - ./models/asr/tokens.txt:/srv/app/tokens.txt:ro
+      - ./models/tts:/srv/app/tts-model:ro
+      - ./models/vad:/srv/silero-vad:ro
+    restart: unless-stopped

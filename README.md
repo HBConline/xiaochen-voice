@@ -240,6 +240,15 @@ MQTT_HOST=127.0.0.1
 MQTT_RELAY_TOPICS=living_room=cmnd/xiaochen-relay1/POWER,bedroom=cmnd/xiaochen-relay2/POWER,curtain=cmnd/xiaochen-curtain1/POWER,curtain:living_room=cmnd/xiaochen-curtain1/POWER
 ```
 
+**容器化部署（可选）**：`server/` 自带 `Dockerfile` + `docker-compose.yml`（voice 管线 + llama.cpp brain 双服务，host 网络），模型放 `server/models/` 挂载进容器：
+
+```bash
+cd server/
+# models/ 布局见 docker-compose.yml 头部注释
+docker compose up -d
+# 发布镜像到 GHCR：bash build-push.sh v0.1
+```
+
 ### 2. 固件构建与烧录（ESP32-S3）
 
 ```bash
