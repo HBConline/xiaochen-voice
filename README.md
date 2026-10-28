@@ -330,16 +330,17 @@ python training/score_ab.py
 
 ## 模型文件说明
 
-仓库只含固件级唤醒模型（`firmware/xiaochen.tflite`，约 75KB）。以下大体积模型**不在仓库内**，按 `docs/` 文档放置到设备：
+仓库只含固件级唤醒模型（`firmware/xiaochen.tflite`，约 75KB）。其余大体积文件全部在 **[Releases](https://github.com/HBConline/xiaochen-voice/releases)** 下载，每个附件带 `.md5` 校验文件：
 
-| 模型 | 大小 | 放置位置 |
+| Release 附件 | 大小 | 放置位置 |
 |------|------|---------|
-| Qwen3-0.6B-xiaochen-Q4_K_M.gguf | ~380MB | `~/chenvoice/brain/` |
-| SenseVoice ASR int8（Sherpa-ONNX） | ~100MB 级 | 服务端模型目录 |
-| Matcha TTS int8 | ~100MB 级 | 服务端模型目录 |
-| Silero VAD | 小 | 服务端模型目录 |
+| `Qwen3-0.6B-xiaochen-Q4_K_M.gguf` | 378MB | `~/chenvoice/brain/` |
+| `voice-models.zip`（asr/tts/vad） | 308MB | 解压到服务端模型目录（包内 README 有路径） |
+| `xiaochen-node1-firmware.bin` | 1MB | OTA 升级用（`firmware/do_ota.py` 推送） |
+| `xiaochen-r9a.tflite` | 75KB | 与仓库内固件模型同物（md5 一致） |
+| `tasmota-lite-14.6.0.bin` | 500KB | ESP-01 刷机（esptool 烧录） |
 
-唤醒词训练数据（真人声/合成样本）同样不入库——含个人声纹，且体积大。
+下载后先校验：`md5sum -c <文件>.md5`。唤醒词训练数据（真人声/合成样本）不入库不发 Release——含个人声纹，且体积大。
 
 ## 路线图
 
