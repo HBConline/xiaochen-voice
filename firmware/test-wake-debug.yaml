@@ -1,0 +1,103 @@
+# ChenVoice 唤醒节点 — ESP32-S3 N16R8 + INMP441
+# 接线（用户实际）: SD=GPIO10 WS=GPIO11 SCK=GPIO12, L/R->GND(左声道)
+esphome:
+  name: xiaochen-node1-dbg
+  friendly_name: 小宸唤醒节点1(调试)
+  includes:
+    - node_audio.h
+  on_boot:
+    priority: -100  # 所有组件 setup 完成后再启动检测
+    then:
+      - micro_wake_word.start:
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  framework:
+    type: esp-idf   # micro_wake_word 必须 IDF（需要 PSRAM/esp-sr 风格内存管理）
+
+# N16R8: 16MB flash / 8MB octal PSRAM
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+api:
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "Xiaochen-Node1-Fallback"
+
+captive_portal:
+
+http_request:
+  id: http_cli
+
+mqtt:
+  id: mqtt_cli
+  broker: 192.168.124.150   # 香橙派 broker（极简 broker，板端已在跑）
+  discovery: false
+  log_topic: null
+  on_message:
+    # 录音/上传期间暂停唤醒检测：板上无 AEC，自己发出的声音会再触发。
+    - topic: chenvoice/control/node1/stt/off
+      then:
+        - micro_wake_word.stop:
+    - topic: chenvoice/control/node1/stt/on
+      then:
+        - micro_wake_word.start:
+
+i2s_audio:
+  - id: i2s_mic
+    # INMP441 用户接线: SD=GPIO10, WS=GPIO11, SCK=GPIO12, L/R->GND
+    i2s_lrclk_pin: GPIO11   # WS
+    i2s_bclk_pin: GPIO12    # SCK/BCLK
+    use_legacy: false
+
+microphone:
+  - platform: i2s_audio
+    id: mic_in
+    i2s_audio_id: i2s_mic
+    i2s_din_pin: GPIO10     # SD (data in)
+    sample_rate: 16000
+    channel: left           # L/R->GND = 左声道
+    adc_type: external
+    pdm: false
+
+micro_wake_word:
+  id: micro_wake_word_
+  stop_after_detection: false
+  models:
+    - model: D:/esphome-xiaochen/xiaochen-debug.json
+  microphone:
+    microphone: mic_in
+  on_wake_word_detected:
+    - script.execute: node_wake
+
+# 录音/上传期间暂停唤醒检测：板上无 AEC，自己发出的声音会再触发。
+# 只认节点上录音任务的状态，不经过 MQTT，避免断网时卡在暂停态。
+interval:
+  - interval: 50ms
+    then:
+      - lambda: 'chenvoice::sync_wake_state();'
+
+script:
+  - id: node_wake
+    then:
+      - output.turn_on: led_status
+      - delay: 500ms
+      - output.turn_off: led_status
+      # 唤醒后录 6s（静音 0.8s 提前收尾）发香橙派做 ASR+意图+TTS。
+      # 播放回复要等录完、上传回来（node_play.h 目前只是占位）。
+      - lambda: 'chenvoice::listen(6, 800);'
+
+output:
+  - platform: gpio
+    id: led_status
+    pin:
+      number: GPIO2
+

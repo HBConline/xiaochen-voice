@@ -1,0 +1,15 @@
+[Unit]
+Description=Xiaochen ST7789 dialogue display (mic_status poller)
+After=network.target chenvoice-voice.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 /home/orangepi/chenvoice/app/st7789_display.py
+WorkingDirectory=/home/orangepi/chenvoice/app
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

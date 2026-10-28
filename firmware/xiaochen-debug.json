@@ -1,0 +1,17 @@
+{
+  "type": "micro",
+  "model": "D:/esphome-xiaochen/xiaochen.tflite",
+  "author": "ChenVoice",
+  "version": 2,
+  "wake_word": "小宸同学",
+  "trained_languages": [
+    "zh"
+  ],
+  "micro": {
+    "probability_cutoff": 0.08,
+    "feature_step_size": 10,
+    "sliding_window_size": 204,
+    "tensor_arena_size": 120000,
+    "minimum_esphome_version": "2025.7.5"
+  }
+}

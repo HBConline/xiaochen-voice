@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智能家居语音助手</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #0d1117;
+  color: #c9d1d9;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 40px 20px;
+}
+.container { max-width: 700px; width: 100%; }
+h1 { font-size: 24px; font-weight: 600; color: #58a6ff; margin-bottom: 8px; }
+.subtitle { color: #8b949e; font-size: 14px; margin-bottom: 32px; }
+
+.state-display {
+  text-align: center;
+  padding: 32px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 16px;
+  margin-bottom: 24px;
+}
+.state-icon { font-size: 64px; margin-bottom: 16px; }
+.state-text { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+.state-hint { color: #8b949e; font-size: 14px; }
+
+.state-waiting .state-icon { animation: pulse 2s infinite; }
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(0.95); }
+}
+.state-listening { border-color: #3fb950; }
+.state-listening .state-icon { color: #3fb950; }
+.state-processing { border-color: #d29922; }
+.state-processing .state-icon { color: #d29922; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.btn-row { display: flex; gap: 12px; justify-content: center; margin-bottom: 24px; }
+button {
+  padding: 12px 32px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-start { background: #238636; color: #fff; }
+.btn-start:hover { background: #2ea043; }
+.btn-start:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
+.btn-stop { background: #da3633; color: #fff; }
+.btn-stop:hover { background: #f85149; }
+.btn-stop:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
+
+.wake-words {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.wake-tag {
+  padding: 6px 16px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 20px;
+  font-size: 13px;
+  color: #8b949e;
+}
+
+.result-box {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  padding: 20px;
+  min-height: 150px;
+  margin-bottom: 16px;
+}
+.result-box h3 {
+  font-size: 13px;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+#results { font-size: 16px; line-height: 1.8; color: #e6edf3; }
+.result-item {
+  padding: 8px 0;
+  border-bottom: 1px solid #21262d;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.result-item:last-child { border-bottom: none; }
+.result-item .keyword {
+  background: #238636;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.result-item .text { color: #e6edf3; flex: 1; }
+.result-item .meta { font-size: 12px; color: #8b949e; white-space: nowrap; }
+.result-item .intent {
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 10px;
+  background: #1f6feb20;
+  border: 1px solid #1f6feb;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #58a6ff;
+}
+
+.file-section {
+  border-top: 1px solid #30363d;
+  padding-top: 24px;
+  margin-top: 24px;
+}
+.file-section h3 {
+  font-size: 13px;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+.test-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.test-btn {
+  background: #161b22;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.test-btn:hover { border-color: #58a6ff; color: #58a6ff; }
+.drop-zone {
+  border: 2px dashed #30363d;
+  border-radius: 8px;
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  margin-bottom: 12px;
+}
+.drop-zone:hover { border-color: #58a6ff; }
+audio { width: 100%; margin-bottom: 12px; border-radius: 8px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🏠 智能家居语音助手</h1>
+  <p class="subtitle">唤醒词检测 + VAD + SenseVoice ASR</p>
+
+  <div class="wake-words" id="wakeWords"></div>
+
+  <div class="state-display state-waiting" id="stateDisplay">
+    <div class="state-icon">🎤</div>
+    <div class="state-text" id="stateText">未连接</div>
+    <div class="state-hint" id="stateHint">点击"开始监听"</div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn-start" id="btnStart" onclick="start()">开始监听</button>
+    <button class="btn-stop" id="btnStop" onclick="stop()" disabled>停止</button>
+  </div>
+
+  <div class="result-box">
+    <h3>识别记录</h3>
+    <div id="results">
+      <div style="color: #484f58">唤醒后说出指令...</div>
+    </div>
+  </div>
+
+  <div class="file-section">
+    <h3>文件测试（无需唤醒词）</h3>
+    <div class="test-btns">
+      <button class="test-btn" onclick="loadTestWav('zh.wav')">zh.wav</button>
+      <button class="test-btn" onclick="loadTestWav('en.wav')">en.wav</button>
+      <button class="test-btn" onclick="loadTestWav('ja.wav')">ja.wav</button>
+      <button class="test-btn" onclick="loadTestWav('ko.wav')">ko.wav</button>
+      <button class="test-btn" onclick="loadTestWav('yue.wav')">yue.wav</button>
+    </div>
+    <div class="drop-zone" id="dropZone">
+      <div style="font-size: 28px; margin-bottom: 8px;">📁</div>
+      <p style="color: #8b949e; font-size: 13px;">拖拽音频文件或点击选择</p>
+      <div id="fileInfo" style="color: #58a6ff; font-size: 14px; margin-top: 8px;"></div>
+    </div>
+    <input type="file" id="fileInput" accept="audio/*" style="display:none">
+    <audio id="audioPlayer" controls style="display:none"></audio>
+    <div style="display: flex; gap: 12px;">
+      <button class="btn-start" id="btnRecognize" onclick="recognizeFile()" disabled>识别文件</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let ws = null;
+let audioContext = null;
+let mediaStream = null;
+let processor = null;
+
+const stateDisplay = document.getElementById('stateDisplay');
+const stateText = document.getElementById('stateText');
+const stateHint = document.getElementById('stateHint');
+const btnStart = document.getElementById('btnStart');
+const btnStop = document.getElementById('btnStop');
+const results = document.getElementById('results');
+const wakeWordsDiv = document.getElementById('wakeWords');
+
+function setState(state, text, hint) {
+  stateDisplay.className = 'state-display state-' + state;
+  stateText.textContent = text;
+  stateHint.textContent = hint;
+}
+
+function addResult(keyword, text, duration, intent) {
+  if (results.querySelector('div[style]')) results.innerHTML = '';
+  const item = document.createElement('div');
+  item.className = 'result-item';
+
+  let intentHtml = '';
+  if (intent) {
+    const actionNames = {
+      'light_on': '开灯', 'light_off': '关灯', 'light_dim': '调光',
+      'temp_up': '升温', 'temp_down': '降温',
+      'curtain_open': '开窗帘', 'curtain_close': '关窗帘',
+      'music_play': '播放音乐', 'music_stop': '停止音乐',
+      'volume_up': '调高音量', 'volume_down': '调低音量',
+      'scene_sleep': '睡眠模式', 'scene_movie': '影院模式', 'scene_home': '回家模式',
+      'query_temp': '查询温度', 'query_weather': '查询天气', 'other': '其他'
+    };
+    const roomNames = {
+      'living_room': '客厅', 'bedroom': '卧室', 'kitchen': '厨房',
+      'bathroom': '卫生间', 'study': '书房', 'balcony': '阳台',
+      'all': '全部', 'none': ''
+    };
+    const action = actionNames[intent.action] || intent.action;
+    const room = roomNames[intent.room] || intent.room;
+    intentHtml = `<div class="intent">指令: ${action} ${room} | 置信度: ${(intent.confidence * 100).toFixed(0)}%</div>`;
+  }
+
+  item.innerHTML = `
+    <span class="keyword">${keyword}</span>
+    <span class="text">${text}</span>
+    <span class="meta">${duration}s</span>
+    ${intentHtml}
+  `;
+  results.prepend(item);
+}
+
+async function start() {
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } });
+  } catch (e) {
+    alert('无法访问麦克风: ' + e.message);
+    return;
+  }
+
+  audioContext = new AudioContext({ sampleRate: 16000 });
+  const source = audioContext.createMediaStreamSource(mediaStream);
+  processor = audioContext.createScriptProcessor(512, 1, 1);
+
+  processor.onaudioprocess = (e) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(new Float32Array(e.inputBuffer.getChannelData(0)).buffer);
+    }
+  };
+
+  source.connect(processor);
+  processor.connect(audioContext.destination);
+
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${protocol}//${location.host}/ws`);
+
+  ws.onopen = () => {
+    btnStart.disabled = true;
+    btnStop.disabled = false;
+  };
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+
+    if (msg.type === 'ready') {
+      setState('waiting', '等待唤醒', '说出唤醒词...');
+      if (msg.wake_words) {
+        wakeWordsDiv.innerHTML = msg.wake_words.map(w => `<span class="wake-tag">${w}</span>`).join('');
+      }
+    } else if (msg.type === 'wake_detected') {
+      setState('listening', '唤醒成功: ' + msg.keyword, '请说出指令...');
+    } else if (msg.type === 'processing') {
+      setState('processing', '识别中...', '正在处理语音...');
+    } else if (msg.type === 'result') {
+      setState('waiting', '等待唤醒', '说出唤醒词...');
+      addResult('指令', msg.text, msg.duration, msg.intent);
+    } else if (msg.type === 'timeout') {
+      setState('waiting', '等待唤醒', '超时，请重新唤醒');
+    }
+  };
+
+  ws.onclose = () => { setState('', '连接断开', ''); cleanup(); };
+  ws.onerror = () => { setState('', '连接错误', ''); cleanup(); };
+}
+
+function stop() {
+  if (ws) ws.close();
+  cleanup();
+}
+
+function cleanup() {
+  if (processor) { processor.disconnect(); processor = null; }
+  if (audioContext) { audioContext.close(); audioContext = null; }
+  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  ws = null;
+  btnStart.disabled = false;
+  btnStop.disabled = true;
+}
+
+// File upload
+let selectedFile = null;
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const audioPlayer = document.getElementById('audioPlayer');
+const btnRecognize = document.getElementById('btnRecognize');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.borderColor = '#58a6ff'; });
+dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = '#30363d'; });
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.style.borderColor = '#30363d';
+  if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files.length) setFile(fileInput.files[0]); });
+
+function setFile(file) {
+  selectedFile = file;
+  fileInfo.textContent = file.name;
+  audioPlayer.src = URL.createObjectURL(file);
+  audioPlayer.style.display = 'block';
+  btnRecognize.disabled = false;
+}
+
+async function loadTestWav(name) {
+  const resp = await fetch('/test_wavs/' + name);
+  const blob = await resp.blob();
+  setFile(new File([blob], name, { type: 'audio/wav' }));
+}
+
+async function recognizeFile() {
+  if (!selectedFile) return;
+  btnRecognize.disabled = true;
+  btnRecognize.textContent = '识别中...';
+  try {
+    const form = new FormData();
+    form.append('audio', selectedFile);
+    const resp = await fetch('/transcribe', { method: 'POST', body: form });
+    const data = await resp.json();
+    if (data.error) {
+      addResult('文件', '错误: ' + data.error, 0, null);
+    } else {
+      addResult('文件', data.text, data.duration, data.intent);
+    }
+  } catch (e) {
+    addResult('文件', '请求失败: ' + e.message, 0);
+  }
+  btnRecognize.disabled = false;
+  btnRecognize.textContent = '识别文件';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>语音链路体验台</title>
+<style>
+/* ==========================================================================
+   ChenVoice 语音链路体验台 — 现代玻璃拟态 (dark glassmorphism)
+   Design tokens first: every colour below is referenced by role, never by a
+   raw hex sprinkled through a component. Changing the accent is one line.
+   ========================================================================== */
+:root {
+  /* surfaces — layered, not one flat black, so glass has depth to sit on */
+  --bg-0: #07090d;            /* page */
+  --bg-1: #0d1117;            /* raised */
+  --glass: rgba(22, 27, 34, 0.55);      /* translucent card face */
+  --glass-hi: rgba(255, 255, 255, 0.04);/* top highlight on a card */
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  /* text — 4.5:1 minimum on --bg-0 for body, 3:1 for meta */
+  --fg: #e8eef4;
+  --fg-dim: #9aa7b4;
+  --fg-faint: #6b7885;
+
+  /* semantic accents */
+  --accent: #2ecc71;          /* running / success */
+  --accent-dim: #1c7a45;
+  --warn: #f0a020;            /* processing */
+  --danger: #ff4d4d;          /* failure */
+  --info: #4da3ff;            /* room / neutral emphasis */
+
+  /* geometry */
+  --r-sm: 8px; --r-md: 14px; --r-lg: 20px;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+
+  /* motion — one rhythm everywhere (motion-consistency) */
+  --dur: 200ms;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);  /* ease-out, spring-ish */
+
+  --font-ui: -apple-system, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Consolas, "Cascadia Mono", monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* Two soft accent blooms behind everything — the light the glass refracts.
+   Purely decorative, so they are fixed and never capture pointer events. */
+body::before, body::after {
+  content: ""; position: fixed; border-radius: 50%;
+  filter: blur(90px); opacity: 0.35; pointer-events: none; z-index: 0;
+}
+body::before { width: 420px; height: 420px; top: -140px; left: -100px; background: #14532d; }
+body::after  { width: 380px; height: 380px; bottom: -160px; right: -120px; background: #1e3a5f; }
+
+body {
+  font-family: var(--font-ui);
+  /* 16px floor: below this iOS auto-zooms form fields and body text hurts. */
+  font-size: 16px;
+  line-height: 1.55;
+  background: var(--bg-0);
+  color: var(--fg);
+  min-height: 100dvh;              /* dvh, not vh: mobile URL bar */
+  display: flex; justify-content: center;
+  padding: var(--sp-6) var(--sp-4) calc(var(--sp-6) + env(safe-area-inset-bottom));
+  position: relative;
+}
+.container { max-width: 900px; width: 100%; position: relative; z-index: 1; }
+
+h1 { font-size: 20px; font-weight: 650; letter-spacing: 0.5px; margin-bottom: var(--sp-1); }
+h1 .hl { color: var(--accent); }
+.subtitle { color: var(--fg-faint); font-size: 13px; margin-bottom: var(--sp-5); }
+
+/* The glass recipe, shared by every panel. One class = one look, so no card
+   can drift from the others (consistency). */
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.37), inset 0 1px 0 var(--glass-hi);
+}
+
+/* ---- pipeline stage dots ---- */
+.pipeline {
+  display: flex; align-items: center;
+  padding: var(--sp-5) var(--sp-5);
+  margin-bottom: var(--sp-4);
+}
+.stage { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); flex: 1; }
+.dot {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: #2a3138;
+  transition: background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.stage.active .dot { animation: blink 0.6s ease-in-out infinite; }
+.stage[data-s="kws"].active .dot, .stage[data-s="kws"].done .dot,
+.stage[data-s="vad"].active .dot, .stage[data-s="vad"].done .dot { background: var(--accent); box-shadow: 0 0 10px rgba(46,204,113,0.55); }
+.stage[data-s="asr"].active .dot, .stage[data-s="nlu"].active .dot { background: var(--warn); box-shadow: 0 0 10px rgba(240,160,32,0.55); }
+.stage[data-s="asr"].done .dot, .stage[data-s="nlu"].done .dot { background: var(--accent); box-shadow: 0 0 10px rgba(46,204,113,0.55); }
+.stage.err .dot { background: var(--danger) !important; box-shadow: 0 0 10px rgba(255,77,77,0.55); animation: none; }
+@keyframes blink { 50% { opacity: 0.25; } }
+/* A state dot that only differs by colour is invisible to a colourblind reader,
+   so the label also carries the state as text (color-not-only). */
+.stage .lbl { font-size: 12px; color: var(--fg-faint); letter-spacing: 0.5px; transition: color var(--dur) var(--ease); }
+.stage.active .lbl, .stage.done .lbl { color: var(--fg); }
+.link { flex: 1; height: 1px; background: var(--border); min-width: 12px; margin-bottom: 22px; }
+
+/* ---- console rows ---- */
+.console {
+  padding: var(--sp-4) var(--sp-5);
+  margin-bottom: var(--sp-4);
+  display: flex; justify-content: space-between; align-items: center; gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+#stateText { font-size: 16px; color: var(--fg); font-weight: 500; }
+#stateHint { font-size: 13px; color: var(--fg-faint); margin-top: var(--sp-1); }
+.wake-tags { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.wake-tag {
+  padding: 6px 14px; border: 1px solid var(--border); border-radius: 999px;
+  font-size: 13px; color: var(--fg-dim);
+  transition: all var(--dur) var(--ease);
+}
+.wake-tag.hot { border-color: var(--accent); color: var(--accent); background: rgba(46,204,113,0.08); }
+
+/* ---- buttons — 44px minimum touch target, one rhythm ---- */
+.btn-row { display: flex; gap: var(--sp-3); margin-bottom: var(--sp-5); }
+button {
+  font-family: inherit; font-size: 14px;
+  min-height: 44px; padding: 0 var(--sp-5);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-strong);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--fg);
+  cursor: pointer;
+  transition: transform 120ms var(--ease), border-color var(--dur) var(--ease), background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: rgba(46,204,113,0.06); }
+button:active:not(:disabled) { transform: scale(0.97); }
+/* Focus must stay visible for keyboard users; never remove the ring. */
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-primary { background: rgba(46,204,113,0.12); border-color: var(--accent); color: var(--accent); }
+.btn-primary:hover:not(:disabled) { background: rgba(46,204,113,0.2); }
+
+/* ---- sections ---- */
+.section { padding: var(--sp-5); margin-bottom: var(--sp-4); }
+.section h2 {
+  font-size: 12px; color: var(--fg-faint); letter-spacing: 1.5px;
+  margin-bottom: var(--sp-4); text-transform: uppercase; font-weight: 600;
+}
+.text-row { display: flex; gap: var(--sp-3); }
+#textInput {
+  flex: 1; min-width: 0;
+  font-family: inherit; font-size: 16px;   /* 16px stops iOS zoom-on-focus */
+  background: rgba(0, 0, 0, 0.3); color: var(--fg);
+  border: 1px solid var(--border-strong); border-radius: var(--r-sm);
+  padding: var(--sp-3) var(--sp-4); min-height: 44px; outline: none;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+#textInput:focus { border-color: var(--accent); background: rgba(0, 0, 0, 0.45); }
+#textInput::placeholder { color: var(--fg-faint); }
+.quick-btns { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-3); }
+.quick {
+  min-height: 36px; padding: 0 var(--sp-3); font-size: 13px; border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); color: var(--fg-dim);
+}
+.quick:hover { border-color: var(--warn); color: var(--warn); background: rgba(240,160,32,0.06); }
+
+.file-row { display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; }
+input[type=file] { font-family: inherit; font-size: 13px; color: var(--fg-dim); }
+
+/* ---- results ---- */
+.results-log { display: flex; flex-direction: column; gap: var(--sp-3); }
+.card {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  border-radius: var(--r-sm); padding: var(--sp-4);
+  animation: cardIn var(--dur) var(--ease) both;
+}
+@keyframes cardIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.card.err { border-left-color: var(--danger); }
+.card .src { font-size: 12px; color: var(--fg-faint); letter-spacing: 0.5px; margin-bottom: var(--sp-2); font-family: var(--font-mono); }
+.card .text { font-size: 16px; color: var(--fg); margin-bottom: var(--sp-3); }
+.tags { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.tag {
+  font-size: 12px; padding: 4px 10px; border-radius: var(--r-sm);
+  border: 1px solid var(--border); color: var(--fg-dim); white-space: nowrap;
+}
+.tag.action { border-color: var(--accent); color: var(--accent); }
+.tag.room { border-color: var(--info); color: var(--info); }
+.tag.urg0 { border-color: var(--border); color: var(--fg-faint); }
+.tag.urg1 { border-color: var(--warn); color: var(--warn); }
+.tag.urg2 { border-color: var(--danger); color: var(--danger); }
+.tag.conf { border-color: var(--border); color: var(--fg-faint); }
+.empty { color: var(--fg-faint); font-size: 14px; padding: var(--sp-2) 0; }
+.reply {
+  margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: 1px dashed var(--border);
+  font-size: 15px; color: var(--accent); display: flex; gap: var(--sp-2); align-items: baseline;
+}
+.reply.err-reply { color: var(--danger); }
+.reply audio { display: block; margin-top: var(--sp-2); width: 100%; height: 36px; }
+/* Inline vector icons scale with the text and inherit its colour. */
+.ico { width: 1.05em; height: 1.05em; flex: none; transform: translateY(0.16em); }
+
+/* execution detail: what the device layer actually did, per command */
+.exec { margin-top: var(--sp-2); display: flex; flex-direction: column; gap: var(--sp-1); }
+.exec-item {
+  font-size: 12px; font-family: var(--font-mono);
+  padding: var(--sp-1) var(--sp-3); border-radius: var(--r-sm);
+  background: rgba(0, 0, 0, 0.3);
+  border-left: 3px solid var(--fg-faint); color: var(--fg-dim);
+}
+.exec-item.ok  { border-left-color: var(--accent); color: var(--accent); }
+.exec-item.bad { border-left-color: var(--danger); color: var(--danger); }
+.exec-item.skip{ border-left-color: var(--warn); color: var(--warn); }
+
+/* ---- live device rows ---- */
+.dev-row {
+  display: flex; align-items: center; gap: var(--sp-3);
+  font-size: 15px; padding: var(--sp-3); border-bottom: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  transition: background var(--dur) var(--ease);
+}
+.dev-row:last-child { border-bottom: none; }
+/* A class whose rooms disagree: the differing rooms are named next to the
+   headline state, so one lit bedroom is not averaged into "all off". */
+.dev-ex { font-size: 12px; color: var(--warn); margin-left: var(--sp-1); }
+/* Just changed by voice — brief highlight so a command's effect is visible. */
+.dev-row.fresh { background: rgba(46,204,113,0.1); box-shadow: inset 2px 0 0 var(--accent); }
+.dev-name { flex: 1; color: var(--fg); display: flex; align-items: baseline; flex-wrap: wrap; }
+/* State is a word, not a colour alone (color-not-only). */
+.dev-state {
+  font-weight: 600; font-size: 13px; padding: 3px 12px; border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+.dev-row.on  .dev-state { color: var(--accent); background: rgba(46,204,113,0.14); }
+.dev-row.off .dev-state { color: var(--fg-faint); background: rgba(255,255,255,0.05); }
+.dev-meta { font-size: 12px; color: var(--fg-faint); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* ---- responsive: 375 / 768 breakpoints, mobile-first behaviour ----
+   On a phone the pipeline dots and console rows stack, the input drops below
+   its button, and every target stays >=44px. No horizontal scroll anywhere. */
+@media (max-width: 768px) {
+  body { padding: var(--sp-4) var(--sp-3); }
+  .container { max-width: 100%; }
+  .pipeline { padding: var(--sp-4) var(--sp-3); }
+  .stage .lbl { font-size: 11px; }
+  .link { min-width: 6px; }
+  .section, .console { padding: var(--sp-4); }
+  .text-row { flex-direction: column; }
+  .text-row button { width: 100%; }
+  .btn-row button { width: 100%; }
+  .console { flex-direction: column; align-items: flex-start; }
+  .wake-tags { margin-top: var(--sp-2); }
+}
+
+/* Respect the OS "reduce motion" setting: kill the blinking and the entrance
+   fade, keep the UI fully usable (Apple Reduced Motion). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+/* Backdrop blur is the expensive part; drop it where the OS says so. */
+@media (prefers-reduced-transparency: reduce) {
+  .glass { backdrop-filter: none; -webkit-backdrop-filter: none; background: #161b22; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>[ <span class="hl">SH</span> ] 语音链路体验台</h1>
+  <p class="subtitle">小宸同学 / KWS · VAD · SenseVoice ASR · 规则意图 (norm 量化 · session 记忆 · scenes 场景 · 能力校验)</p>
+
+  <div class="pipeline glass" id="pipeline">
+    <div class="stage" data-s="kws"><div class="dot"></div><div class="lbl">唤醒 KWS</div></div>
+    <div class="link"></div>
+    <div class="stage" data-s="vad"><div class="dot"></div><div class="lbl">断句 VAD</div></div>
+    <div class="link"></div>
+    <div class="stage" data-s="asr"><div class="dot"></div><div class="lbl">识别 ASR</div></div>
+    <div class="link"></div>
+    <div class="stage" data-s="nlu"><div class="dot"></div><div class="lbl">意图 NLU</div></div>
+  </div>
+
+  <div class="console glass">
+    <div>
+      <div id="stateText">未连接</div>
+      <div id="stateHint">点击「麦克风全链路」开始</div>
+    </div>
+    <div class="wake-tags" id="wakeTags">
+      <span class="wake-tag">小宸同学</span>
+      <span class="wake-tag">小宸小宸</span>
+      <span class="wake-tag">你好小宸</span>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn-primary" id="btnMic" onclick="toggleMic()">麦克风全链路</button>
+  </div>
+
+  <div class="section glass" id="boardSection">
+    <h2>板载麦克风（板子自行采集 · 本页只显示）</h2>
+    <div class="console glass" style="margin-bottom:10px">
+      <div>
+        <div id="bState">等待连接…</div>
+        <div id="bHint">板载麦在板子上独立循环运行，此处实时镜像</div>
+      </div>
+      <div style="text-align:right">
+        <div id="bDevice" style="font-size:12px;color:#6e7681">--</div>
+      </div>
+    </div>
+    <div class="results-log" id="bLog">
+      <div class="empty">-- 空 --</div>
+    </div>
+  </div>
+
+  <div class="section glass" id="liveSection">
+    <h2>实时状态 <span id="liveBackend" style="font-size:12px;color:#6e7681;font-weight:400"></span></h2>
+    <div class="console glass" style="margin-bottom:10px">
+      <div>
+        <div id="sessText" style="font-size:13px">会话：--</div>
+        <div id="sessHint" style="font-size:12px;color:#6e7681">上一房间 / 设备 / 动作</div>
+      </div>
+      <div style="text-align:right">
+        <div id="sessTime" style="font-size:12px;color:#6e7681">--</div>
+      </div>
+    </div>
+    <div class="results-log" id="devLog" style="max-height:220px">
+      <div class="empty">-- 无设备记录 --</div>
+    </div>
+  </div>
+
+  <div class="section glass">
+    <h2>文本直测意图（跳过 KWS/VAD/ASR）</h2>
+    <div class="text-row">
+      <input id="textInput" placeholder="输入指令，回车 —— 例如：有点冷给我弄热点"
+             onkeydown="if(event.key==='Enter') testText()">
+      <button class="btn-primary" onclick="testText()">测</button>
+    </div>
+    <div class="quick-btns" id="quickBtns"></div>
+  </div>
+
+  <div class="section glass">
+    <h2>音频文件（ASR + 意图，跳过唤醒）</h2>
+    <div class="file-row">
+      <input type="file" id="fileInput" accept="audio/*">
+      <button onclick="recognizeFile()">识别</button>
+    </div>
+  </div>
+
+  <div class="section glass">
+    <h2>识别记录</h2>
+    <div class="results-log" id="log">
+      <div class="empty">-- 空 --</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const ACTION_NAMES = {
+  light_on: '开灯', light_off: '关灯', light_dim: '调光', light_color: '调灯光颜色',
+  temp_up: '升温', temp_down: '降温', temp_set: '设定温度',
+  curtain_open: '开窗帘', curtain_close: '关窗帘',
+  music_play: '播放音乐', music_stop: '停止音乐', music_next: '下一曲', music_prev: '上一曲',
+  volume_up: '加音量', volume_down: '减音量', volume_set: '设定音量',
+  fan_on: '开风扇', fan_off: '关风扇', fan_speed: '风扇风速',
+  ac_on: '开空调', ac_off: '关空调',
+  tv_on: '开电视', tv_off: '关电视',
+  scene_sleep: '睡眠模式', scene_movie: '影院模式', scene_home: '回家模式',
+  scene_away: '离家模式', scene_party: '派对模式', scene_read: '阅读模式',
+  door_lock: '锁门', door_unlock: '解锁',
+  query_temp: '查温度', query_humidity: '查湿度', query_weather: '查天气', query_time: '查时间',
+  alarm_set: '设闹钟', alarm_cancel: '取消闹钟', other: '其他'
+};
+const ROOM_NAMES = {
+  living_room: '客厅', bedroom: '卧室', kitchen: '厨房', bathroom: '卫生间',
+  study: '书房', balcony: '阳台', dining_room: '餐厅', kids_room: '儿童房',
+  all: '全部', none: '无指定'
+};
+const URG_NAMES = ['一般', '较急', '紧急'];
+
+// Speaker glyph for reply bubbles. Inline SVG with stroke=currentColor so it
+// inherits the bubble's accent colour and stays crisp at any zoom — an emoji
+// would be a different picture on every OS (no-emoji-icons).
+const SPEAKER_SVG = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>';
+const QUICK = [
+  '打开客厅的灯', '空调开到26度', '有点冷给我弄热点', '不想听了',
+  '来点爵士乐', '把家里灯全灭了', '定个明早7点的闹钟', '阳台的灯坏了吗'
+];
+
+const stages = {};
+document.querySelectorAll('.stage').forEach(el => stages[el.dataset.s] = el);
+const stateText = document.getElementById('stateText');
+const stateHint = document.getElementById('stateHint');
+const logDiv = document.getElementById('log');
+
+document.getElementById('quickBtns').innerHTML = QUICK.map(q =>
+  `<button class="quick" onclick="quickFill('${q}')">${q}</button>`).join('');
+
+function resetStages() {
+  for (const s of Object.values(stages)) s.className = 'stage';
+}
+function setStage(name, cls) {
+  if (!stages[name]) return;
+  stages[name].className = 'stage ' + cls;
+}
+function setState(text, hint) {
+  stateText.textContent = text;
+  stateHint.textContent = hint || '';
+}
+
+function addCard(src, text, intent, reply) {
+  const empty = logDiv.querySelector('.empty');
+  if (empty) empty.remove();
+  const card = document.createElement('div');
+  card.className = 'card';
+  if (!intent) card.classList.add('err');
+  let tags = '';
+  if (intent) {
+    const cmds = intent.commands && intent.commands.length ? intent.commands : [intent];
+    tags = '<div class="tags">' + cmds.map((c, i) => {
+      const a = ACTION_NAMES[c.action] || c.action;
+      const r = ROOM_NAMES[c.room] || c.room;
+      const lvl = (c.urgency_level != null) ? c.urgency_level : Math.round(c.urgency * 2);
+      const u = URG_NAMES[lvl] || lvl;
+      const n = cmds.length > 1 ? `#${i + 1} ` : '';
+      // An unsupported action is the interesting case, so it gets its own tag
+      // rather than a plain confidence reading — the reply refuses it, and the
+      // console should show why.
+      const sup = c.supported === false
+        ? `<span class="tag urg2">不支持</span>` : '';
+      const src = c.source ? `<span class="tag conf">${c.source}</span>` : '';
+      return `<span class="tag action">${n}${a}</span>
+        <span class="tag room">${r}</span>
+        <span class="tag urg${lvl}">${u}</span>
+        <span class="tag conf">${(c.confidence * 100).toFixed(0)}%</span>${src}${sup}`;
+    }).join('') + '</div>';
+  }
+  // Execution detail: what the device layer actually did, per command. Shown so
+  // a fluent reply can be checked against the hardware result behind it.
+  let execHtml = '';
+  if (reply && reply.executed && reply.executed.length) {
+    execHtml = '<div class="exec">' + reply.executed.map(e => {
+      const ok = e.ok && e.supported !== false;
+      const cls = e.supported === false ? 'skip' : (ok ? 'ok' : 'bad');
+      const label = e.supported === false ? '跳过'
+        : (ok ? '执行' : '失败');
+      const rooms = (e.executed || []).join(',') || e.room;
+      return `<span class="exec-item ${cls}">${label} ${e.action} @ ${rooms}` +
+        (e.detail ? ` — ${e.detail}` : '') + `</span>`;
+    }).join('') + '</div>';
+  }
+  let replyHtml = '';
+  if (reply) {
+    if (reply.reply_error) {
+      replyHtml = `<div class="reply err-reply">TTS 失败: ${reply.reply_error}</div>`;
+    } else if (reply.reply_text) {
+      // An inline vector icon, not an emoji: emoji render differently per OS
+      // and cannot take the panel's colour tokens (no-emoji-icons).
+      replyHtml = `<div class="reply">${SPEAKER_SVG}${esc(reply.reply_text)}</div>`;
+      // Auto-play the synthesized reply whenever there is one. Previously only
+      // the mic path attached a player, so text/file tests were silent.
+      if (reply.reply_audio) {
+        replyHtml += `<audio controls autoplay src="/tts_audio/${encodeURIComponent(reply.reply_audio)}"></audio>`;
+      }
+    }
+  }
+  card.innerHTML = `<div class="src">${src}</div><div class="text">${text}</div>${tags}${execHtml}${replyHtml}`;
+  logDiv.prepend(card);
+  refreshLive();
+  return card;
+}
+
+function attachReply(card, reply) {
+  // The mic path renders the card first (no reply yet) then calls this once the
+  // TTS wav arrives. Rebuild the card so the same addCard rendering — text +
+  // player — applies to every source, keeping one code path for audio output.
+  if (!card || !reply || reply.reply_error || !reply.reply_audio) return;
+  const div = document.createElement('div');
+  div.className = 'reply';
+  // Same inline SVG as the text path; innerHTML here (not textContent) because
+  // the icon is markup — the reply text itself is escaped by esc().
+  div.innerHTML = SPEAKER_SVG + esc(reply.reply_text || '');
+  const audio = document.createElement('audio');
+  audio.controls = true;
+  audio.autoplay = true;
+  audio.src = '/tts_audio/' + encodeURIComponent(reply.reply_audio);
+  div.appendChild(audio);
+  card.appendChild(div);
+  audio.play().catch(() => {});
+}
+
+function playReplyAudio(reply) {
+  if (!reply || reply.reply_error || !reply.reply_audio) return;
+  const audio = new Audio('/tts_audio/' + encodeURIComponent(reply.reply_audio));
+  audio.play().catch(() => {});
+}
+
+// ---- quick fill ----
+function quickFill(q) {
+  document.getElementById('textInput').value = q;
+  testText();
+}
+
+// ---- text intent ----
+async function testText() {
+  const text = document.getElementById('textInput').value.trim();
+  if (!text) return;
+  resetStages();
+  setStage('nlu', 'active');
+  setState('意图推理中...', text);
+  try {
+    const resp = await fetch('/intent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, speak: true })
+    });
+    const data = await resp.json();
+    if (data.error) {
+      setStage('nlu', 'err');
+      addCard('文本', '错误: ' + data.error, null);
+    } else {
+      setStage('nlu', 'done');
+      setState('完成', '直接测意图通道');
+      addCard('文本', text, data.intent, data);
+    }
+  } catch (e) {
+    setStage('nlu', 'err');
+    addCard('文本', '请求失败: ' + e.message, null);
+  }
+}
+
+// ---- file ----
+async function recognizeFile() {
+  const f = document.getElementById('fileInput').files[0];
+  if (!f) return;
+  resetStages();
+  setStage('asr', 'active');
+  setState('ASR 识别中...', f.name);
+  try {
+    const form = new FormData();
+    form.append('audio', f);
+    const resp = await fetch('/transcribe', { method: 'POST', body: form });
+    const data = await resp.json();
+    if (data.error) {
+      setStage('asr', 'err');
+      addCard('文件', '错误: ' + data.error, null);
+      return;
+    }
+    setStage('asr', 'done');
+    setStage('nlu', 'done');
+    setState('完成', f.name);
+    addCard('文件', data.text, data.intent, data);
+  } catch (e) {
+    setStage('asr', 'err');
+    addCard('文件', '请求失败: ' + e.message, null);
+  }
+}
+
+// ---- mic full chain ----
+let ws = null, audioContext = null, mediaStream = null, processor = null, micOn = false;
+
+async function toggleMic() {
+  if (micOn) { stopMic(); return; }
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } });
+  } catch (e) {
+    alert('无法访问麦克风: ' + e.message);
+    return;
+  }
+  audioContext = new AudioContext({ sampleRate: 16000 });
+  const source = audioContext.createMediaStreamSource(mediaStream);
+  processor = audioContext.createScriptProcessor(512, 1, 1);
+  processor.onaudioprocess = (e) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(new Float32Array(e.inputBuffer.getChannelData(0)).buffer);
+    }
+  };
+  source.connect(processor);
+  processor.connect(audioContext.destination);
+
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${protocol}//${location.host}/ws`);
+  ws.binaryType = 'arraybuffer';
+
+  ws.onopen = () => {
+    micOn = true;
+    document.getElementById('btnMic').textContent = '停止麦克风';
+  };
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'ready') {
+      resetStages();
+      setStage('kws', 'active');
+      setState('等待唤醒', '说「小宸同学」...');
+    } else if (msg.type === 'wake_detected') {
+      resetStages();
+      setStage('kws', 'done');
+      setStage('vad', 'active');
+      setState('唤醒成功: ' + msg.keyword, '请说指令（停顿 0.8 秒自动断句）');
+    } else if (msg.type === 'processing') {
+      setStage('vad', 'done');
+      setStage('asr', 'active');
+      setState('ASR 识别中...', '');
+    } else if (msg.type === 'result') {
+      setStage('asr', 'done');
+      setStage('nlu', 'done');
+      setState('完成，合成回复中...', '');
+      window._lastCard = addCard('麦克风', msg.text, msg.intent);
+    } else if (msg.type === 'reply') {
+      setState('完成，回到待唤醒', '');
+      attachReply(window._lastCard, msg);
+    } else if (msg.type === 'timeout') {
+      resetStages();
+      setStage('kws', 'active');
+      setState('超时', '未收到语音，重新唤醒');
+    }
+  };
+  ws.onclose = () => { setState('连接断开', ''); stopMic(); };
+  ws.onerror = () => { setState('连接错误', ''); stopMic(); };
+}
+
+function stopMic() {
+  micOn = false;
+  if (ws) { try { ws.close(); } catch (e) {} ws = null; }
+  if (processor) { processor.disconnect(); processor = null; }
+  if (audioContext) { audioContext.close(); audioContext = null; }
+  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  document.getElementById('btnMic').textContent = '麦克风全链路';
+  setState('已停止', '');
+}
+
+// ---- 板载麦镜像面板 ----
+const B_LABEL = { off: '未启用', waiting_wake: '待唤醒', listening: '聆听中…', processing: '处理中…' };
+const bState = document.getElementById('bState');
+const bHint = document.getElementById('bHint');
+const bDevice = document.getElementById('bDevice');
+const bLog = document.getElementById('bLog');
+let bLastEventTs = 0;
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"]/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+function renderBoard(st) {
+  // No board mic configured (PC dev sets MIC_DEVICE empty): hide the whole
+  // section. Leaving it up showed a permanent "等待连接…" that read as a
+  // failure when it was simply not applicable to this host.
+  const section = document.getElementById('boardSection');
+  const off = !st.device || st.state === 'off';
+  if (off) {
+    if (section) section.style.display = 'none';
+    return;
+  }
+  if (section) section.style.display = '';
+  bState.textContent = B_LABEL[st.state] || st.state;
+  bState.style.color = st.state === 'listening' ? '#27ae60'
+                     : st.state === 'processing' ? '#e0a020'
+                     : '#8b949e';
+  bDevice.textContent = st.device ? ('设备 ' + st.device) : '未配置 MIC_DEVICE';
+  if (st.last_error) bHint.textContent = '最近错误: ' + st.last_error;
+  else bHint.textContent = '板载麦在板子上独立循环运行，此处实时镜像';
+
+  const evs = st.events || [];
+  if (!evs.length) { bLog.innerHTML = '<div class="empty">-- 空 --</div>'; return; }
+  const newest = evs[0].ts || 0;
+  const changed = newest !== bLastEventTs;
+  bLastEventTs = newest;
+  bLog.innerHTML = evs.map(ev => {
+    const t = new Date((ev.ts || 0) * 1000).toLocaleTimeString();
+    if (ev.kind === 'wake') {
+      return `<div class="result"><div class="r-head">${t} · 唤醒 <b>${esc(ev.keyword)}</b></div></div>`;
+    }
+    if (ev.kind === 'error') {
+      return `<div class="result"><div class="r-head">${t} · 错误</div>
+        <div class="r-text">${esc(ev.said)} → ${esc(ev.error)}</div></div>`;
+    }
+    const i = ev.intent || {};
+    const a = ACTION_NAMES[i.action] || i.action || '?';
+    const r = ROOM_NAMES[i.room] || i.room || '?';
+    const rep = ev.reply || {};
+    return `<div class="result">
+      <div class="r-head">${t} · ${esc(ev.said)}</div>
+      <div class="r-text">意图 ${esc(a)} / ${esc(r)}（紧急度 ${URG_NAMES[i.urgency_level] || '?'}）</div>
+      <div class="r-text">回复 [${esc(rep.source || '?')}]：${esc(rep.text)}</div>
+      ${rep.audio ? `<audio controls src="/tts_audio/${esc(rep.audio)}"></audio>` : ''}
+    </div>`;
+  }).join('');
+  if (changed) bLog.firstElementChild.style.borderLeftColor = '#27ae60';
+}
+
+async function pollBoard() {
+  try {
+    const r = await fetch('/mic_status', { cache: 'no-store' });
+    if (r.ok) renderBoard(await r.json());
+  } catch (e) { /* board loop may be off; keep polling quietly */ }
+}
+pollBoard();
+setInterval(pollBoard, 1200);
+
+// --- live device state + session memory ------------------------------------
+// Polled so the panel always mirrors the device store the voice layer reads.
+// A status question and this panel must never disagree; when they do, the
+// server's answer is the bug, and seeing it here makes that visible.
+async function refreshLive() {
+  try {
+    const [sr, r] = await Promise.all([
+      fetch('/state', { cache: 'no-store' }),
+      fetch('/session', { cache: 'no-store' }),
+    ]);
+    if (sr.ok) {
+      const st = await sr.json();
+      document.getElementById('liveBackend').textContent =
+        st.backend ? `（后端 ${st.backend}）` : '';
+      const box = document.getElementById('devLog');
+      // One row per device class. `exceptions` names the rooms that disagree
+      // with the headline, so "空调 关（卧室 开）" shows the one lit room
+      // without listing the other seven.
+      const list = st.groups || [];
+      if (!list.length) {
+        box.innerHTML = '<div class="empty">-- 无设备记录 --</div>';
+      } else {
+        box.innerHTML = list.map(d => {
+          const on = d.on ? 'on' : 'off';
+          const ago = d.ago != null ? `${d.ago}s 前` : '--';
+          const ex = (d.exceptions || []).map(e =>
+            `${esc(e.room_zh)} ${e.on ? '开' : '关'}`).join('、');
+          const exHtml = ex ? `<span class="dev-ex">（${ex}）</span>` : '';
+          return `<div class="dev-row ${on}${d.fresh ? ' fresh' : ''}">
+            <span class="dev-name">${esc(d.device_zh || d.device)}${exHtml}</span>
+            <span class="dev-state">${d.on ? '开' : '关'}</span>
+            <span class="dev-meta">${esc(d.by)} · ${ago}</span>
+          </div>`;
+        }).join('');
+      }
+    }
+    if (r.ok) {
+      const s = await r.json();
+      document.getElementById('sessText').textContent =
+        `会话：房间 ${s.last_room || '--'} / 设备 ${s.last_device || '--'} / 动作 ${s.last_action || '--'}`;
+      document.getElementById('sessTime').textContent = s.time_of_day || '--';
+    }
+  } catch (e) { /* server may be mid-restart; keep polling */ }
+}
+refreshLive();
+setInterval(refreshLive, 1500);
+</script>
+</body>
+</html>

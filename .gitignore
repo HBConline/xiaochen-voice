@@ -1,0 +1,39 @@
+# secrets
+secrets.yaml
+*.pem
+*.key
+id_rsa*
+
+# models / large binaries
+*.gguf
+*.onnx
+*.bin
+models/
+trained_models/
+tts-model/
+brain/*.gguf
+
+# audio / data
+*.wav
+*.mp3
+samples/
+voices/
+test_wavs/
+
+# build artifacts
+.esphome/
+pio-core/
+__pycache__/
+*.pyc
+.pio/
+
+# logs / runtime state
+*.log
+*.jsonl
+device_state.json
+miss_log.jsonl
+tokens.txt
+
+# misc
+*.bak
+tmp/

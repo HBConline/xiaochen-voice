@@ -1,0 +1,93 @@
+# 临时探针：复刻 xiaochen-node1 的完整链路（含 node_audio.h 采集任务），
+# 只把 mic 宽度换成 32bit 槽，验证 INMP441 数据落在槽的哪一段。
+# ChenVoice 唤醒节点 — ESP32-S3 N16R8 + INMP441
+# 接线（用户实际）: SD=GPIO10 WS=GPIO11 SCK=GPIO12, L/R->GND(左声道)
+esphome:
+  name: xiaochen-node1
+  friendly_name: 小宸唤醒节点1
+  includes:
+    - node_audio.h
+  on_boot:
+    priority: -100
+    then:
+      - lambda: 'chenvoice::clean_init();'
+      - lambda: 'chenvoice::mww_start_owned();'
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  framework:
+    type: esp-idf   # micro_wake_word 必须 IDF（需要 PSRAM/esp-sr 风格内存管理）
+
+# N16R8: 16MB flash / 8MB octal PSRAM
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+api:
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "Xiaochen-Node1-Fallback"
+
+captive_portal:
+
+mqtt:
+  broker: 192.168.124.150   # 香橙派 broker（极简 broker，板端已在跑）
+  discovery: false
+  log_topic: null
+
+i2s_audio:
+  - id: i2s_mic
+    # INMP441 用户接线: SD=GPIO10, WS=GPIO11, SCK=GPIO12, L/R->GND
+    i2s_lrclk_pin: GPIO11   # WS
+    i2s_bclk_pin: GPIO12    # SCK/BCLK
+    use_legacy: false
+
+microphone:
+  - platform: i2s_audio
+    id: mic_in
+    i2s_audio_id: i2s_mic
+    i2s_din_pin: GPIO10     # SD (data in)
+    sample_rate: 16000
+    channel: left           # L/R->GND = 左声道
+    # 探针：32bit 槽（INMP441 是 24bit 数据左对齐）。
+    bits_per_sample: 32bit
+    correct_dc_offset: false
+    adc_type: external
+    pdm: false
+
+micro_wake_word:
+  id: micro_wake_word_
+  models:
+    - model: D:/esphome-xiaochen/xiaochen.json
+  microphone:
+    microphone: mic_in
+  on_wake_word_detected:
+    - script.execute: node_wake
+
+interval:
+  - interval: 100ms
+    then:
+      - lambda: 'chenvoice::cn_maintain();'
+
+script:
+  - id: node_wake
+    then:
+      - output.turn_on: led_status
+      - delay: 500ms
+      - output.turn_off: led_status
+      - lambda: 'chenvoice::mww_stop_owned();'
+      - lambda: 'chenvoice::listen(6, 800);'
+
+output:
+  - platform: gpio
+    id: led_status
+    pin:
+      number: GPIO2
+      inverted: true

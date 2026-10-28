@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SenseVoice ASR 测试</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #0d1117;
+  color: #c9d1d9;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 40px 20px;
+}
+.container {
+  max-width: 700px;
+  width: 100%;
+}
+h1 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #58a6ff;
+  margin-bottom: 8px;
+}
+.subtitle {
+  color: #8b949e;
+  font-size: 14px;
+  margin-bottom: 32px;
+}
+.drop-zone {
+  border: 2px dashed #30363d;
+  border-radius: 12px;
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  margin-bottom: 20px;
+}
+.drop-zone:hover, .drop-zone.dragover {
+  border-color: #58a6ff;
+  background: #161b22;
+}
+.drop-zone .icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+.drop-zone p {
+  color: #8b949e;
+  font-size: 14px;
+}
+.drop-zone .filename {
+  color: #58a6ff;
+  font-size: 16px;
+  font-weight: 500;
+  margin-top: 8px;
+}
+.row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+select, button {
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  border: 1px solid #30363d;
+  background: #161b22;
+  color: #c9d1d9;
+}
+select:focus, button:focus {
+  outline: none;
+  border-color: #58a6ff;
+}
+button {
+  cursor: pointer;
+  background: #238636;
+  border-color: #2ea043;
+  color: #fff;
+  font-weight: 500;
+  min-width: 100px;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+button:hover:not(:disabled) {
+  background: #2ea043;
+}
+.result-box {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  padding: 20px;
+  min-height: 120px;
+  margin-bottom: 16px;
+}
+.result-box h3 {
+  font-size: 13px;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+#result-text {
+  font-size: 18px;
+  line-height: 1.6;
+  color: #e6edf3;
+  word-break: break-all;
+}
+.meta {
+  display: flex;
+  gap: 24px;
+  font-size: 13px;
+  color: #8b949e;
+}
+.meta span { display: inline-flex; align-items: center; gap: 4px; }
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #30363d;
+  border-top-color: #58a6ff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+audio {
+  width: 100%;
+  margin-bottom: 20px;
+  border-radius: 8px;
+}
+.test-wavs {
+  margin-bottom: 24px;
+}
+.test-wavs h3 {
+  font-size: 13px;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+.test-wavs .btns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.test-wavs button {
+  background: #161b22;
+  border-color: #30363d;
+  font-size: 13px;
+  padding: 6px 14px;
+}
+.test-wavs button:hover { border-color: #58a6ff; color: #58a6ff; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🎤 SenseVoice ASR</h1>
+  <p class="subtitle">语音识别测试 — 支持中/英/日/韩/粤语</p>
+
+  <div class="test-wavs">
+    <h3>示例音频</h3>
+    <div class="btns">
+      <button onclick="loadTestWav('zh.wav')">zh.wav 中文</button>
+      <button onclick="loadTestWav('en.wav')">en.wav English</button>
+      <button onclick="loadTestWav('ja.wav')">ja.wav 日本語</button>
+      <button onclick="loadTestWav('ko.wav')">ko.wav 한국어</button>
+      <button onclick="loadTestWav('yue.wav')">yue.wav 粤语</button>
+    </div>
+  </div>
+
+  <div class="drop-zone" id="dropZone">
+    <div class="icon">📁</div>
+    <p>拖拽音频文件到此处，或点击选择</p>
+    <p style="margin-top:4px;font-size:12px;color:#484f58">支持 WAV / MP3 / FLAC / OGG / M4A</p>
+    <div class="filename" id="filename"></div>
+  </div>
+  <input type="file" id="fileInput" accept="audio/*" style="display:none">
+
+  <audio id="audioPlayer" controls style="display:none"></audio>
+
+  <div class="row">
+    <select id="lang">
+      <option value="auto">自动检测</option>
+      <option value="zh" selected>中文</option>
+      <option value="en">English</option>
+      <option value="ja">日本語</option>
+      <option value="ko">한국어</option>
+      <option value="yue">粤语</option>
+    </select>
+    <button id="btnRecognize" disabled onclick="recognize()">
+      开始识别
+    </button>
+  </div>
+
+  <div class="result-box">
+    <h3>识别结果</h3>
+    <div id="result-text" style="color:#484f58">等待音频输入...</div>
+  </div>
+  <div class="meta" id="meta"></div>
+</div>
+
+<script>
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const filename = document.getElementById('filename');
+const audioPlayer = document.getElementById('audioPlayer');
+const btnRecognize = document.getElementById('btnRecognize');
+const resultText = document.getElementById('result-text');
+const meta = document.getElementById('meta');
+
+let selectedFile = null;
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) setFile(fileInput.files[0]);
+});
+
+function setFile(file) {
+  selectedFile = file;
+  filename.textContent = file.name;
+  const url = URL.createObjectURL(file);
+  audioPlayer.src = url;
+  audioPlayer.style.display = 'block';
+  btnRecognize.disabled = false;
+  resultText.textContent = '等待识别...';
+  resultText.style.color = '#484f58';
+  meta.innerHTML = '';
+}
+
+async function loadTestWav(name) {
+  const resp = await fetch('/test_wavs/' + name);
+  const blob = await resp.blob();
+  const file = new File([blob], name, { type: 'audio/wav' });
+  setFile(file);
+}
+
+async function recognize() {
+  if (!selectedFile) return;
+
+  btnRecognize.disabled = true;
+  btnRecognize.innerHTML = '<span class="spinner"></span> 识别中...';
+  resultText.textContent = '';
+  resultText.style.color = '#c9d1d9';
+  meta.innerHTML = '';
+
+  const t0 = performance.now();
+  try {
+    const form = new FormData();
+    form.append('audio', selectedFile);
+
+    const resp = await fetch('/transcribe', { method: 'POST', body: form });
+    const data = await resp.json();
+
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+
+    if (data.error) {
+      resultText.textContent = '错误: ' + data.error;
+      resultText.style.color = '#f85149';
+    } else {
+      resultText.textContent = data.text || '(无识别结果)';
+      meta.innerHTML =
+        `<span>⏱ 音频 ${data.duration}s</span>` +
+        `<span>⚡ 耗时 ${elapsed}s</span>` +
+        `<span>📊 RTF ${(elapsed / data.duration).toFixed(2)}</span>`;
+    }
+  } catch (e) {
+    resultText.textContent = '请求失败: ' + e.message;
+    resultText.style.color = '#f85149';
+  }
+
+  btnRecognize.disabled = false;
+  btnRecognize.innerHTML = '开始识别';
+}
+</script>
+</body>
+</html>
