@@ -19,7 +19,7 @@ ESP32-S3 节点                香橙派 4 Pro（纯 CPU）              ESP8266
 
 - **端侧**：microWakeWord 混合网络以真实人声语料 TensorFlow 从头训练，PTQ int8 量化经 TFLite Micro 在 ESP32-S3（FreeRTOS）常驻流式推理；OTA 统一升级 + 固件字节级校验保障版本一致。
 - **边缘侧**：Sherpa-ONNX int8 运行时（SenseVoice ASR / Silero VAD / Matcha TTS）；意图分两级——微规则直达设备、零推理开销，复杂请求由 Qwen3-0.6B（Q4_K_M，llama.cpp CPU 推理）解析；提示词工程定义人设与工具调用规范，经 MCP 协议把设备与系统能力封装为标准化工具，大模型自主选工具生成设备指令。
-- **网络**：香橙派经 hostapd 自建 WiFi AP，节点与继电器设备统一入网，按 MAC 绑定固定 IP，断外网可用。
+- **网络**：香橙派经 hostapd 自建 WiFi AP，节点与继电器设备统一入网，按 MAC 绑定固定 IP，断外网可用。部署套件见 `deploy/softap/`，切换步骤见 `docs/softap-cutover.md`。
 
 ## 目录
 
@@ -29,6 +29,7 @@ ESP32-S3 节点                香橙派 4 Pro（纯 CPU）              ESP8266
 | `server/` | 香橙派服务端：ASR/意图/TTS 管线、MCP 服务、设备层、测试套件、systemd 单元 |
 | `training/` | 唤醒词训练脚本（数据构建、切分、TFLite 转换、A/B 评分） |
 | `tools/` | ESP-01 Tasmota 串口配置、网络扫描、继电器测试脚本 |
+| `deploy/softap/` | 自建 WiFi AP 部署套件（hostapd/dnsmasq/MAC 固定 IP + 一键脚本） |
 | `docs/` | 部署交接文档、唤醒词训练指南 |
 
 ## 模型文件说明
