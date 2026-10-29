@@ -13,6 +13,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
 
+# OCI 来源标签：GHCR 据此自动关联仓库（放末尾保构建缓存）
+LABEL org.opencontainers.image.source="https://github.com/HBConline/xiaochen-voice"
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/srv/app
 
