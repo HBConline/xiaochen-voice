@@ -1,0 +1,15 @@
+[Unit]
+Description=ChenVoice voice pipeline (KWS+VAD+ASR+intent+TTS)
+After=network.target chenvoice-brain.service
+Wants=chenvoice-brain.service
+
+[Service]
+Type=simple
+User=orangepi
+WorkingDirectory=/home/orangepi/chenvoice
+ExecStart=/home/orangepi/chenvoice/scripts/start_server.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

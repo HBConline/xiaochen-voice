@@ -1,0 +1,14 @@
+[Unit]
+Description=ChenVoice llama-server voice brain (Qwen3-0.6B xiaochen)
+After=network.target
+
+[Service]
+Type=simple
+User=orangepi
+WorkingDirectory=/home/orangepi/chenvoice
+ExecStart=/home/orangepi/chenvoice/scripts/start_llama.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

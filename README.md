@@ -1,6 +1,8 @@
 # 小宸同学 · 全离线家庭语音助手
 
 > ESP32-S3 端侧唤醒 + 香橙派边缘大脑（ASR / 两级决策 / Qwen3-0.6B / TTS）+ ESP8266 继电器执行，「唤醒—识别—决策—执行—播报」端—边协同秒级闭环，全程局域网运行、不依赖云端。
+>
+> 📦 模型大文件 [Releases](https://github.com/HBConline/xiaochen-voice/releases) · 🐳 镜像 [`ghcr.io/hbconline/xiaochen-voice-server`](https://github.com/users/HBConline/packages/container/package/xiaochen-voice-server) · 🛒 采购 [`docs/BOM.md`](docs/BOM.md)
 
 一套自研的端—边协同语音助手系统。采音节点常驻唤醒词检测，喊一声「小宸同学」即进入对话；语音识别、意图理解、大模型决策、语音合成都发生在本地的香橙派 4 Pro 上；识别结果经 MQTT 驱动继电器控制灯、窗帘、风扇等家电，应答语音推回节点播放。覆盖「数据构建—模型训练—量化转换—部署—真机迭代」的完整端侧模型部署链路。
 
@@ -144,6 +146,7 @@ xiaochen-voice/
 ├── README.md                     # 本文
 ├── firmware/                     # ESP32-S3 节点固件
 │   ├── xiaochen-node1.yaml       # ESPHome 主配置（WiFi/MQTT/microWakeWord/I2S/屏幕）
+│   ├── secrets.yaml.example      # WiFi 凭据模板（cp 为 secrets.yaml 填写，永不入库）
 │   ├── xiaochen.json             # 唤醒模型描述（cutoff 0.07、滑动窗 30、tensor arena 120KB）
 │   ├── xiaochen.tflite           # 唤醒模型（int8，约 75KB，r9a 真人声训练版）
 │   ├── node_audio.h              # 音频核心：唤醒任务、起声门控录音、HTTP 上传、TTS 接收播放
@@ -175,8 +178,15 @@ xiaochen-voice/
 │   │   ├── home_config.py / gen_dataset.py                 # 配置、数据生成
 │   │   ├── static/               # Web 调试页（index/play/realtime/wakeword）
 │   │   └── test_*.py             # 测试套件 ×8
+│   ├── scripts/                  # 派上启动脚本
+│   │   ├── start_llama.sh        # llama-server（Qwen3-0.6B 大脑，-c 2048 --parallel 1）
+│   │   └── start_server.sh       # 语音管线（注入 BRAIN_URL / TTS_THREADS 等）
+│   ├── Dockerfile                # voice 管线镜像（GHCR: xiaochen-voice-server）
+│   ├── docker-compose.yml        # brain + voice 双服务（模型挂载，host 网络）
+│   ├── requirements.txt          # 服务端 Python 依赖
+│   ├── build-push.sh             # arm64 构建并推送 GHCR
 │   └── deploy/
-│       ├── chenvoice-display.service   # systemd 单元
+│       ├── chenvoice-*.service   # systemd 单元（brain / voice / display）
 │       └── softap/               # ★ 网络自治部署套件
 │           ├── hostapd.conf      # AP 配置（SSID xiaochen-ai，密码占位）
 │           ├── dnsmasq.conf      # DHCP + MAC 固定 IP（.10/.21/.22/.23/.24）
@@ -213,23 +223,24 @@ xiaochen-voice/
 ### 1. 服务端部署（香橙派）
 
 ```bash
-# 同步 server/ 到派
-scp -r server/ orangepi@<派IP>:~/chenvoice/
+# 同步 server/ 到派（内容落位到 ~/chenvoice/ 根，与 systemd 单元路径一致）
+ssh orangepi@<派IP> 'mkdir -p ~/chenvoice'
+scp -r server/* orangepi@<派IP>:~/chenvoice/
 
-# 服务端依赖（示例）
-pip install flask paho-mqtt sherpa-onnx
+# 服务端依赖
+pip install -r ~/chenvoice/requirements.txt
 
 # 放置模型（不在本仓库，见「模型文件说明」）
 #   ~/chenvoice/brain/Qwen3-0.6B-xiaochen-Q4_K_M.gguf
 #   Sherpa-ONNX ASR/TTS/VAD int8 模型目录
 
 # 启动（llama.cpp 先起，服务后起）
-./scripts/start_llama.sh      # -c 2048 --parallel 1 -fa on
-./scripts/start_server.sh     # 导出 BRAIN_URL / TTS_THREADS 等环境变量
+bash ~/chenvoice/scripts/start_llama.sh      # -c 2048 --parallel 1 -fa on
+bash ~/chenvoice/scripts/start_server.sh     # 导出 BRAIN_URL / TTS_THREADS 等环境变量
 
-# 服务化（systemd）
-sudo cp server/deploy/*.service /etc/systemd/system/
-sudo systemctl enable --now chenvoice-voice
+# 服务化（systemd 三单元：brain / voice / display）
+sudo cp ~/chenvoice/deploy/*.service /etc/systemd/system/
+sudo systemctl enable --now chenvoice-brain chenvoice-voice
 ```
 
 配置通过环境变量注入（systemd drop-in），关键项：
@@ -243,9 +254,12 @@ MQTT_RELAY_TOPICS=living_room=cmnd/xiaochen-relay1/POWER,bedroom=cmnd/xiaochen-r
 **容器化部署（可选）**：`server/` 自带 `Dockerfile` + `docker-compose.yml`（voice 管线 + llama.cpp brain 双服务，host 网络），模型放 `server/models/` 挂载进容器：
 
 ```bash
+# 直接拉已发布镜像（免本地构建，linux/arm64）
+docker pull ghcr.io/hbconline/xiaochen-voice-server:v0.1
+
 cd server/
 # models/ 布局见 docker-compose.yml 头部注释
-docker compose up -d
+docker compose up -d            # 镜像在本地就用现成的，缺了才构建
 # 发布镜像到 GHCR：bash build-push.sh v0.1
 ```
 
@@ -353,6 +367,7 @@ python training/score_ab.py
 
 ## 路线图
 
+- [x] Docker 镜像发布 GHCR（v0.1，2026-10-29）
 - [ ] SoftAP 实际切换（套件已就绪，见 `docs/softap-cutover.md`）
 - [ ] 风扇板（ec:fa:bc）串口排查完成 → 配置 `xiaochen-fan1` → 加 `fan`/`fan:bedroom` 绑定
 - [ ] r9c 唤醒模型：近似词（小明/小张/沈同学）困难负例扩充后重训
