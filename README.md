@@ -2,7 +2,7 @@
 
 > ESP32-S3 端侧唤醒 + 香橙派边缘大脑（ASR / 两级决策 / Qwen3-0.6B / TTS）+ ESP8266 继电器执行，「唤醒—识别—决策—执行—播报」端—边协同秒级闭环，全程局域网运行、不依赖云端。
 >
-> 📦 模型大文件 [Releases](https://github.com/HBConline/xiaochen-voice/releases) · 🐳 镜像 [`ghcr.io/hbconline/xiaochen-voice-server`](https://github.com/users/HBConline/packages/container/package/xiaochen-voice-server) · 🛒 采购 [`docs/BOM.md`](docs/BOM.md)
+> 🎬 演示视频 [bilibili](https://b23.tv/lUWWbtx) · 📦 模型大文件 [Releases](https://github.com/HBConline/xiaochen-voice/releases) · 🐳 镜像 [`ghcr.io/hbconline/xiaochen-voice-server`](https://github.com/users/HBConline/packages/container/package/xiaochen-voice-server) · 🛒 采购 [`docs/BOM.md`](docs/BOM.md) · 🔌 接线 [`docs/WIRING.md`](docs/WIRING.md)
 
 一套自研的端—边协同语音助手系统。采音节点常驻唤醒词检测，喊一声「小宸同学」即进入对话；语音识别、意图理解、大模型决策、语音合成都发生在本地的香橙派 4 Pro 上；识别结果经 MQTT 驱动继电器控制灯、窗帘、风扇等家电，应答语音推回节点播放。覆盖「数据构建—模型训练—量化转换—部署—真机迭代」的完整端侧模型部署链路。
 
