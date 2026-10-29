@@ -71,7 +71,7 @@
 
 ## 硬件清单
 
-> 采购明细、参考价与注意事项见 [`docs/BOM.md`](docs/BOM.md)。
+> 采购明细、参考价与注意事项见 [`docs/BOM.md`](docs/BOM.md)；接线图见 [`docs/WIRING.md`](docs/WIRING.md)。
 
 | 硬件 | 角色 | 关键规格 | 数量 |
 |------|------|---------|------|
@@ -208,6 +208,8 @@ xiaochen-voice/
 │   └── test_curtain_relay.py     # 窗帘绑定回归测试（11 项）
 └── docs/
     ├── softap-cutover.md         # ★ SoftAP 切换清单（地址迁移/验证/回滚）
+    ├── WIRING.md                 # ★ 接线图（节点音频/ST7789 屏/ESP-01 刷机与继电器）
+    ├── BOM.md                    # 采购清单（参考价与避坑）
     ├── HANDOFF-ORANGEPI.md       # 香橙派部署交接文档
     └── MWW-TRAINING-GUIDE.md     # 唤醒词训练指南
 ```
@@ -281,7 +283,7 @@ python do_ota.py                       # espota2 推 192.168.x.x:3232
 
 ### 3. 继电器板配置（ESP-01 / Tasmota）
 
-接线（TTL 刷机）：CH340 TX↔模块 RXD、RX↔TXD 交叉，**VCC 只接 3.3V**，EN(CH_PD)→3V3，IO0→GND 进下载模式。供电不足必须外部供电（CH340 3.3V 带不动 WiFi）。
+接线（TTL 刷机）：CH340 TX↔模块 RXD、RX↔TXD 交叉，**VCC 只接 3.3V**，EN(CH_PD)→3V3，IO0→GND 进下载模式。供电不足必须外部供电（CH340 3.3V 带不动 WiFi）。完整接线图见 [`docs/WIRING.md`](docs/WIRING.md)。
 
 刷 Tasmota-lite 14.6 后串口一键配置：
 
