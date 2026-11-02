@@ -1,5 +1,7 @@
 # 小宸同学 · 全离线家庭语音助手
 
+**简体中文** | [English](README-EN.md)
+
 > ESP32-S3 端侧唤醒 + 香橙派边缘大脑（ASR / 两级决策 / Qwen3-0.6B / TTS）+ ESP8266 继电器执行，「唤醒—识别—决策—执行—播报」端—边协同秒级闭环，全程局域网运行、不依赖云端。
 >
 > 🎬 演示视频 [bilibili](https://b23.tv/lUWWbtx) · 📦 模型大文件 [Releases](https://github.com/HBConline/xiaochen-voice/releases) · 🐳 镜像 [`ghcr.io/hbconline/xiaochen-voice-server`](https://github.com/users/HBConline/packages/container/package/xiaochen-voice-server) · 🛒 采购 [`docs/BOM.md`](docs/BOM.md) · 🔌 接线 [`docs/WIRING.md`](docs/WIRING.md)
@@ -147,7 +149,7 @@
 
 ```
 xiaochen-voice/
-├── README.md                     # 本文
+├── README.md / README-EN.md      # 本文（中文）/ English version
 ├── firmware/                     # ESP32-S3 节点固件
 │   ├── xiaochen-node1.yaml       # ESPHome 主配置（WiFi/MQTT/microWakeWord/I2S/屏幕）
 │   ├── secrets.yaml.example      # WiFi 凭据模板（cp 为 secrets.yaml 填写，永不入库）
