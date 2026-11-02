@@ -28,6 +28,7 @@ A self-built device–edge collaborative voice assistant. The audio node runs wa
 - [Model Files](#model-files)
 - [Roadmap](#roadmap)
 - [FAQ](#faq)
+- [Contributors](#contributors)
 
 ---
 
@@ -401,3 +402,8 @@ Audio never leaves the LAN. Real-voice training data is never committed either.
 
 **Q: Why aren't the large model files in the repo?**
 GitHub's 100 MB per-file limit, plus voiceprint/size considerations. The small wake model (75 KB) is in-repo; grab the big ones per "Model Files".
+
+## Contributors
+
+- [@HBConline](https://github.com/HBConline) — author: hardware, data, training, deployment, real-device tuning
+- [Claude](https://claude.ai) (Anthropic) — pair programming: firmware/server code, training pipeline, test suites, docs
